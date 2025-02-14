@@ -1,0 +1,99 @@
+provider "azurerm" {
+  features {}
+
+  client_id       = "6cbfcca7-ab47-4d47-ab6c-7743303fc2da"
+  client_secret   = "IlC8Q~AqoRnNoVrXXJ1l5hMNsbidaZIZL46cGcGk"
+  tenant_id       = "e2f8cd1b-a228-450b-aa16-6618918130b2"
+  subscription_id = "fc268311-65d9-4a95-990a-bb9df54f014c"
+}
+resource "azurerm_resource_group" "rg" {
+  name     = "baji-rg"
+  location = "West Europe"
+}
+
+resource "azurerm_virtual_network" "vnet" {
+  name                = "baji-vnet"
+  address_space       = ["10.10.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  depends_on = [ azurerm_resource_group.rg ]
+}
+
+resource "azurerm_subnet" "subnet01" {
+  name                 = "baji-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.10.1.0/24"]
+  depends_on = [ azurerm_virtual_network.vnet ]
+}
+resource "azurerm_network_security_group" "nsg" {
+  name                = "baji-nsg"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  security_rule {
+    name                       = "test123"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+tags =   {
+    environment = "production"
+}
+depends_on = [azurerm_network_security_group.nsg]
+}
+resource "azurerm_network_interface" "nic" {
+  name                = "baji-nic"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "testconfiguration1"
+    subnet_id                     = azurerm_subnet.subnet01.id
+    private_ip_address_allocation = "Dynamic"
+  }
+  depends_on = [ azurerm_network_interface.nic ]
+}
+
+resource "azurerm_virtual_machine" "main" {
+  name                  = "baji-vm01"
+  location              = azurerm_resource_group.rg.location
+  resource_group_name   = azurerm_resource_group.rg.name
+  network_interface_ids = [azurerm_network_interface.nic.id]
+  vm_size               = "Standard_DS1_v2" 
+
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  # delete_os_disk_on_termination = true
+
+  # Uncomment this line to delete the data disks automatically when deleting the VM
+  # delete_data_disks_on_termination = true
+
+  storage_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+  storage_os_disk {
+    name              = "myosdisk1"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Standard_LRS"
+  }
+  os_profile {
+    computer_name  = "hostname"
+    admin_username = "bajibabu"
+    admin_password = "7702711465@Ba"
+  }
+  os_profile_linux_config {
+    disable_password_authentication = false
+  }
+  tags = {
+    environment = "staging"
+  }
+}
